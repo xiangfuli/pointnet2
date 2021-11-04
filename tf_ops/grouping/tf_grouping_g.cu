@@ -1,5 +1,12 @@
 // input: radius (1), nsample (1), xyz1 (b,n,3), xyz2 (b,m,3)
 // output: idx (b,m,nsample), pts_cnt (b,m)
+
+
+// pts_cnt -> in each centroid point, how many points is included in its ball
+// xyz1 -> row data point (batch_size, number_of_data, 3)
+// xyz2 -> sampled points in each data batch
+// nsample -> how many points in each local region
+// idx -> for each local region, the index of the points in the ball
 __global__ void query_ball_point_gpu(int b, int n, int m, float radius, int nsample, const float *xyz1, const float *xyz2, int *idx, int *pts_cnt) {
     int batch_index = blockIdx.x;
     xyz1 += n*3*batch_index;
@@ -10,7 +17,7 @@ __global__ void query_ball_point_gpu(int b, int n, int m, float radius, int nsam
     int index = threadIdx.x;
     int stride = blockDim.x;
     
-    for (int j=index;j<m;j+=stride) {
+    for (int j=index;j<m;j+=stride) { // if the data point in each batch is bigger than blockDim, j+= stride can make sure all data is processed
         int cnt = 0;
         for (int k=0;k<n;++k) {
             if (cnt == nsample)

@@ -105,13 +105,17 @@ __global__ void binarysearchKernel(int b,int n,int m,const float * __restrict__ 
 __global__ void farthestpointsamplingKernel(int b,int n,int m,const float * __restrict__ dataset,float * __restrict__ temp,int * __restrict__ idxs){
   if (m<=0)
     return;
+  // set with constant 512 because of limitation in GPU cuda? like maxmium number of blocks
+  // I think it should be block size
   const int BlockSize=512;
   __shared__ float dists[BlockSize];
   __shared__ int dists_i[BlockSize];
   const int BufferSize=3072;
   __shared__ float buf[BufferSize*3];
+  // one grid with multiple blocks will be processed in fixed streaming process unit in GPU
   for (int i=blockIdx.x;i<b;i+=gridDim.x){
     int old=0;
+    // for each fps result in each data sample, initialize the first as 0
     if (threadIdx.x==0)
       idxs[i*m+0]=old;
     for (int j=threadIdx.x;j<n;j+=blockDim.x){
@@ -121,15 +125,22 @@ __global__ void farthestpointsamplingKernel(int b,int n,int m,const float * __re
       buf[j]=dataset[i*n*3+j];
     }
     __syncthreads();
+    // for each 3D point cloud data, sample out m points
     for (int j=1;j<m;j++){
       int besti=0;
       float best=-1;
+      // for each thread, get the 3D point in the single 3D point cloud data in the batched data
+      // in each dataset, because the input is flatten, we only have [0,1,2,3,4....] # len = b * n 
       float x1=dataset[i*n*3+old*3+0];
       float y1=dataset[i*n*3+old*3+1];
       float z1=dataset[i*n*3+old*3+2];
       for (int k=threadIdx.x;k<n;k+=blockDim.x){
+        // for each block, there is certain part with length n(points numbers in each data sample) in temp sensor
+        // each temp is initialized with big num 1e38
+        // temp variable is used to store the 
         float td=temp[blockIdx.x*n+k];
         float x2,y2,z2;
+        // only share certain part of the dataset ?
         if (k<BufferSize){
           x2=buf[k*3+0];
           y2=buf[k*3+1];
@@ -139,6 +150,7 @@ __global__ void farthestpointsamplingKernel(int b,int n,int m,const float * __re
           y2=dataset[i*n*3+k*3+1];
           z2=dataset[i*n*3+k*3+2];
         }
+        // euclidean distance
         float d=(x2-x1)*(x2-x1)+(y2-y1)*(y2-y1)+(z2-z1)*(z2-z1);
         float d2=min(d,td);
         if (d2!=td)
@@ -148,11 +160,13 @@ __global__ void farthestpointsamplingKernel(int b,int n,int m,const float * __re
           besti=k;
         }
       }
+      // after calculate the distance of each point in data sample with the first sampled data, put it into dists and dists_i
       dists[threadIdx.x]=best;
       dists_i[threadIdx.x]=besti;
-      for (int u=0;(1<<u)<blockDim.x;u++){
+      // 归并排序？
+      for (int u=0;(1<<u)<blockDim.x;u++){ // u = 0,1,2,3,4,5...
         __syncthreads();
-        if (threadIdx.x<(blockDim.x>>(u+1))){
+        if (threadIdx.x<(blockDim.x>>(u+1))){ // x < 1024, 512, 256, 128, 64...
           int i1=(threadIdx.x*2)<<u;
           int i2=(threadIdx.x*2+1)<<u;
           if (dists[i1]<dists[i2]){
@@ -169,6 +183,7 @@ __global__ void farthestpointsamplingKernel(int b,int n,int m,const float * __re
   }
 }
 
+// block dim (2,8,1)
 __global__ void gatherpointKernel(int b,int n,int m,const float * __restrict__ inp,const int * __restrict__ idx,float * __restrict__ out){
   for (int i=blockIdx.x;i<b;i+=gridDim.x){
     for (int j=blockIdx.y*blockDim.x+threadIdx.x;j<m;j+=blockDim.x*gridDim.y){

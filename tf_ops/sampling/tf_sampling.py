@@ -9,6 +9,7 @@ import sys
 import os
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(BASE_DIR)
+print("tf_sampling.py")
 sampling_module=tf.load_op_library(os.path.join(BASE_DIR, 'tf_sampling_so.so'))
 def prob_sample(inp,inpr):
     '''
@@ -34,6 +35,7 @@ input:
 returns:
     batch_size * npoints * 3    float32
     '''
+    print("tf_sampling.py gather_point")
     return sampling_module.gather_point(inp,idx)
 #@tf.RegisterShape('GatherPoint')
 #def _gather_point_shape(op):
@@ -53,6 +55,7 @@ input:
 returns:
     batch_size * npoint         int32
     '''
+    print("tf_sampling.py fps")
     return sampling_module.farthest_point_sample(inp, npoint)
 ops.NoGradient('FarthestPointSample')
     

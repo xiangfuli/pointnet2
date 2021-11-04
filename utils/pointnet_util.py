@@ -68,6 +68,7 @@ def sample_and_group_all(xyz, points, use_xyz=True):
     Note:
         Equivalent to sample_and_group with npoint=1, radius=inf, use (0,0,0) as the centroid
     '''
+    print("group all..........")
     batch_size = xyz.get_shape()[0].value
     nsample = xyz.get_shape()[1].value
     new_xyz = tf.constant(np.tile(np.array([0,0,0]).reshape((1,1,3)), (batch_size,1,1)),dtype=tf.float32) # (batch_size, 1, 3)
@@ -81,6 +82,7 @@ def sample_and_group_all(xyz, points, use_xyz=True):
         new_points = tf.expand_dims(new_points, 1) # (batch_size, 1, 16, 259)
     else:
         new_points = grouped_xyz
+    print("group all finished.")
     return new_xyz, new_points, idx, grouped_xyz
 
 
@@ -106,11 +108,13 @@ def pointnet_sa_module(xyz, points, npoint, radius, nsample, mlp, mlp2, group_al
     data_format = 'NCHW' if use_nchw else 'NHWC'
     with tf.variable_scope(scope) as sc:
         # Sample and Grouping
+        print("Start to use model, npoints: %s, radius: %s" % (npoint, radius))
         if group_all:
             nsample = xyz.get_shape()[1].value
             new_xyz, new_points, idx, grouped_xyz = sample_and_group_all(xyz, points, use_xyz)
         else:
             new_xyz, new_points, idx, grouped_xyz = sample_and_group(npoint, radius, nsample, xyz, points, knn, use_xyz)
+        print("end sample and group.")
 
         # Point Feature Embedding
         if use_nchw: new_points = tf.transpose(new_points, [0,3,1,2])
